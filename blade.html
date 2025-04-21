@@ -587,15 +587,35 @@
             position: absolute;
             bottom: 100%;
             left: 50%;
-            transform: translateX(-50%);
+            transform: translateX(-50%) translateY(-10px);
             background-color: rgba(0, 0, 0, 0.8);
             color: white;
             padding: 4px 8px;
             border-radius: 4px;
-            font-size: 12px;
+            font-size: 14px;
             white-space: nowrap;
-            margin-bottom: 8px;
             pointer-events: none;
+            z-index: 101;
+            margin-bottom: 5px;
+        }
+
+        /* Dialog styling improvements */
+        .dialog-overlay {
+            background-color: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(4px);
+        }
+
+        .animate-spin {
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            from {
+                transform: rotate(0deg);
+            }
+            to {
+                transform: rotate(360deg);
+            }
         }
     </style>
 </head>
@@ -832,33 +852,48 @@
                 <div class="bg-white rounded-lg shadow-xl w-full max-w-md">
                     <div class="p-6">
                         <div id="exportContent">
-                            <h3 class="text-lg font-medium text-gray-900 mb-4">Export Virtual Tour</h3>
+                            <div class="flex justify-between items-center mb-4">
+                                <h3 class="text-lg font-medium text-gray-900">Export Virtual Tour</h3>
+                                <button onclick="closeExportDialog()" class="text-gray-400 hover:text-gray-500">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                            
+                            <!-- Error message container -->
+                            <div id="exportError" class="hidden mb-4 p-3 bg-red-100 text-red-700 rounded-md">
+                                <p class="text-sm"></p>
+                            </div>
+                            
                             <div class="space-y-4">
                                 <div>
                                     <label class="flex items-center">
-                                        <input type="checkbox" id="includeViewer" class="rounded border-gray-300 text-[#1a365d] focus:ring-[#1a365d]" checked>
+                                        <input type="checkbox" id="includeViewer" class="rounded border-gray-300 text-blue-600 focus:ring-blue-500" checked>
                                         <span class="ml-2 text-sm text-gray-700">Include Viewer Files</span>
                                     </label>
                                 </div>
                                 <div>
                                     <label class="flex items-center">
-                                        <input type="checkbox" id="includePWA" class="rounded border-gray-300 text-[#1a365d] focus:ring-[#1a365d]" checked>
+                                        <input type="checkbox" id="includePWA" class="rounded border-gray-300 text-blue-600 focus:ring-blue-500" checked>
                                         <span class="ml-2 text-sm text-gray-700">Include PWA Files</span>
                                     </label>
                                 </div>
                             </div>
+                            
                             <div class="mt-6 flex justify-end space-x-3">
-                                <button type="button" onclick="closeExportDialog()" class="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500">
+                                <button type="button" onclick="closeExportDialog()" 
+                                        class="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200">
                                     Cancel
                                 </button>
-                                <button type="button" onclick="startExport()" class="px-4 py-2 text-sm font-medium text-white bg-[#1a365d] rounded-md hover:bg-[#2c5282] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#1a365d]">
+                                <button type="button" onclick="startExport()" 
+                                        class="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700">
                                     Export
                                 </button>
                             </div>
                         </div>
+                        
                         <div id="exportLoading" class="hidden">
                             <div class="flex flex-col items-center justify-center space-y-4">
-                                <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-[#1a365d]"></div>
+                                <div class="animate-spin rounded-full h-12 w-12 border-4 border-blue-600 border-t-transparent"></div>
                                 <p class="text-gray-700">Generating export package...</p>
                             </div>
                         </div>
@@ -3286,438 +3321,244 @@
 
         // Start export function
         async function startExport() {
-            console.log('=== EXPORT FUNCTION STARTED ===');
-            
             try {
-                // For debugging, log every step
-                console.log('Step 1: Initializing export');
-                
-                // Show loading state
-                const exportLoading = document.getElementById('exportLoading');
-                const exportContent = document.getElementById('exportContent');
-                const exportButton = document.querySelector('button[onclick="startExport()"]');
-                
-                console.log('Step 2: UI elements:', { 
-                    exportLoading: !!exportLoading, 
-                    exportContent: !!exportContent,
-                    exportButton: !!exportButton
-                });
-                
-                if (exportLoading) exportLoading.classList.remove('hidden');
-                if (exportContent) exportContent.classList.add('hidden');
-                if (exportButton) exportButton.disabled = true;
-                
-                console.log('Step 3: Creating scene array');
-                
-                // THIS IS LINE 3526 IN THE ERROR - Create scenes directly and log each step
-                let scenes = [];
-                console.log('3.1: Empty scenes array created');
-                
-                // Add a hard-coded scene with INTEGER ID - this was the issue!
-                scenes.push({
-                    id: 1, // Changed from string "1" to integer 1
-                    title: "Sample Panorama",
-                    imageUrl: "https://pannellum.org/images/alma.jpg",
-                    hotspots: []
-                });
-                
-                console.log('3.2: Added scene to array, new length:', scenes.length);
-                console.log('3.3: Scene data:', JSON.stringify(scenes));
-                
-                // Check if scenes array has items - this is where the error was happening
-                if (!scenes || scenes.length === 0) {
-                    console.error('ERROR: Scenes array is empty after adding items!');
+                const scenes = getScenesToExport();
+                if (!scenes.length) {
                     throw new Error('No scenes found to export');
                 }
-                
-                console.log('Step 4: Getting virtual tour ID');
-                
-                // Get the virtual tour ID
-                const editorEl = document.getElementById('editor');
-                console.log('4.1: Editor element:', editorEl);
-                
-                let virtualTourId = null;
-                if (editorEl && editorEl.dataset.tourId) {
-                    virtualTourId = editorEl.dataset.tourId;
-                } else {
-                    const virtualTourIdEl = document.getElementById('virtualTourId');
-                    if (virtualTourIdEl) {
-                        virtualTourId = virtualTourIdEl.value;
-                    }
-                }
-                
-                console.log('4.2: Virtual Tour ID:', virtualTourId);
-                
-                if (!virtualTourId) {
-                    // If we can't find the ID, create a fallback
-                    virtualTourId = "1";
-                    console.warn('4.3: Using fallback tour ID:', virtualTourId);
-                }
-                
-                console.log('Step 5: Preparing export data');
-                
-                // Prepare export data as simple as possible - Match the expected format from the controller
-                const exportData = {
-                    virtualTourId: parseInt(virtualTourId),
-                    title: "Test Export",
-                    scenes: scenes,
-                    config: {
-                        includeViewer: true,
-                        includePWA: true
-                    }
-                };
-                
-                // Log the export data that will be sent to the server
-                console.log('5.1: Export data prepared:', JSON.stringify(exportData));
-                
-                console.log('Step 6: Sending request to server');
-                
-                // Get CSRF token
-                const metaTag = document.querySelector('meta[name="csrf-token"]');
-                const csrfToken = metaTag ? metaTag.content : '';
-                console.log('6.1: CSRF Token found:', !!csrfToken);
-                
-                // Format URL
-                const exportUrl = `/agent/virtual-360/${virtualTourId}/export`;
-                console.log('6.2: Export URL:', exportUrl);
-                
-                // Make request with explicit try/catch
-                try {
-                    console.log('6.3: Sending fetch request...');
-                    
-                    const response = await fetch(exportUrl, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Accept': 'application/json',
-                            'X-CSRF-TOKEN': csrfToken
-                        },
-                        body: JSON.stringify(exportData)
-                    });
-                    
-                    console.log('6.4: Response received, status:', response.status);
-                    
-                    // Save the server response for debugging
-                    const responseText = await response.text();
-                    console.log('6.5: Raw server response:', responseText);
-                    
-                    // Try to parse the response as JSON
-                    let responseData;
-                    try {
-                        responseData = JSON.parse(responseText);
-                        console.log('6.6: Parsed server response:', responseData);
-                    } catch (e) {
-                        console.log('6.6: Response is not JSON');
-                    }
-                    
-                    // Reset the response for further processing
-                    const responseBlob = new Blob([responseText], { type: response.headers.get('content-type') });
-                    response = new Response(responseBlob, {
-                        status: response.status,
-                        statusText: response.statusText,
-                        headers: response.headers
-                    });
-                    
-                    if (!response.ok) {
-                        let errorText = 'Server error: ' + response.status;
-                        if (responseData && responseData.message) {
-                            errorText = responseData.message;
-                        }
-                        throw new Error(errorText);
-                    }
-                    
-                    console.log('Step 7: Processing response');
-                    
-                    // Process the blob response
-                    const blob = await response.blob();
-                    console.log('7.1: Blob received, size:', blob.size, 'type:', blob.type);
-                    
-                    // Create download
-                    const downloadUrl = window.URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = downloadUrl;
-                    a.download = `virtual-tour-${virtualTourId}.zip`;
-                    document.body.appendChild(a);
-                    
-                    console.log('7.2: Download link created, clicking...');
-                    a.click();
-                    
-                    // Cleanup
-                    window.URL.revokeObjectURL(downloadUrl);
-                    document.body.removeChild(a);
-                    
-                    console.log('Step 8: Export completed successfully');
-                    showToast('Export package created successfully', 'success');
-                } catch (fetchError) {
-                    console.error('Fetch error:', fetchError);
-                    throw new Error('Network error: ' + fetchError.message);
-                }
-            } catch (error) {
-                console.error('=== EXPORT ERROR ===', error);
-                showToast('Error creating export package: ' + error.message, 'error');
-            } finally {
-                console.log('Step 9: Cleanup');
-                
-                // Reset UI
-                const exportLoading = document.getElementById('exportLoading');
-                const exportContent = document.getElementById('exportContent');
-                const exportButton = document.querySelector('button[onclick="startExport()"]');
-                
-                if (exportContent) exportContent.classList.remove('hidden');
-                if (exportLoading) exportLoading.classList.add('hidden');
-                if (exportButton) exportButton.disabled = false;
-                
-                // Close dialog
-                closeExportDialog();
-                
-                console.log('=== EXPORT FUNCTION COMPLETED ===');
-            }
-        }
-
-        function showToast(message, type = 'info') {
-            const toast = document.createElement('div');
-            toast.className = `fixed top-4 right-4 p-4 rounded-lg shadow-lg z-50 ${
-                type === 'error' ? 'bg-red-500' : 
-                type === 'success' ? 'bg-green-500' : 
-                'bg-blue-500'
-            } text-white`;
-            toast.textContent = message;
-            document.body.appendChild(toast);
-            setTimeout(() => toast.remove(), 3000);
-        }
-
-        // Add export button click handler
-        document.getElementById('exportBtn').addEventListener('click', showExportDialog);
-
-        // ... existing code ...
-        function exportVirtualTour() {
-            try {
-                const editor = document.getElementById('editor');
-                if (!editor) throw new Error('Editor element not found');
-
-                const virtualTourId = editor.dataset.tourId;
-                if (!virtualTourId) throw new Error('Virtual tour ID not found');
 
                 // Show loading state
-                const exportBtn = document.querySelector('[data-action="export"]');
-                const originalText = exportBtn.innerHTML;
-                exportBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Exporting...';
-                exportBtn.disabled = true;
+                document.getElementById('exportContent').classList.add('hidden');
+                document.getElementById('exportLoading').classList.remove('hidden');
 
-                // Prepare export data
-                const exportData = {
-                    virtualTourId: parseInt(virtualTourId),
-                    title: document.querySelector('#tour-title').value || 'Untitled Tour',
-                    scenes: window.scenes || [],
-                    config: {
-                        startScene: window.startScene,
-                        compass: window.compass,
-                        autorotate: window.autorotate,
-                        // Add any other configuration options here
-                    }
-                };
+                // Get export options
+                const includeViewer = document.getElementById('includeViewer').checked;
+                const includePWA = document.getElementById('includePWA').checked;
 
-                // Make API request
-                fetch(`/api/virtual-tours/${virtualTourId}/export`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
-                    },
-                    body: JSON.stringify(exportData)
-                })
-                .then(response => {
-                    if (!response.ok) throw new Error('Export failed');
-                    return response.blob();
-                })
-                .then(blob => {
-                    // Create download link
-                    const url = window.URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = `virtual-tour-${virtualTourId}.json`;
-                    document.body.appendChild(a);
-                    a.click();
-                    window.URL.revokeObjectURL(url);
-                    a.remove();
-
-                    // Reset button state
-                    exportBtn.innerHTML = originalText;
-                    exportBtn.disabled = false;
-
-                    // Show success message
-                    showNotification('Tour exported successfully!', 'success');
-                })
-                .catch(error => {
-                    console.error('Export error:', error);
-                    exportBtn.innerHTML = originalText;
-                    exportBtn.disabled = false;
-                    showNotification('Failed to export tour. Please try again.', 'error');
-                });
-            } catch (error) {
-                console.error('Export error:', error);
-                showNotification(error.message, 'error');
-            }
-        }
-
-        // Add notification function if not exists
-        function showNotification(message, type = 'info') {
-            const notification = document.createElement('div');
-            notification.className = `fixed top-4 right-4 p-4 rounded-lg shadow-lg z-50 ${
-                type === 'error' ? 'bg-red-500' : 
-                type === 'success' ? 'bg-green-500' : 
-                'bg-blue-500'
-            } text-white`;
-            notification.textContent = message;
-            document.body.appendChild(notification);
-            setTimeout(() => notification.remove(), 3000);
-        }
-        // ... existing code ...
-
-        // Export tour function
-        window.exportTour = function() {
-            try {
-                const virtualTourId = getVirtualTourId();
-                if (!virtualTourId) {
+                // Get virtual tour data
+                const tourId = getVirtualTourId();
+                if (!tourId) {
                     throw new Error('Virtual Tour ID not found');
                 }
 
-                // Show export dialog
-                const exportDialog = document.getElementById('exportDialog');
-                if (exportDialog) {
-                    exportDialog.classList.remove('hidden');
-                }
-            } catch (error) {
-                console.error('Error opening export dialog:', error);
-                showToast('Error opening export dialog: ' + error.message, 'error');
-            }
-        }
+                console.log('Preparing export with tour ID:', tourId);
+                console.log('Scenes to export:', scenes);
 
-        // Start export function
-        async function startExport() {
-            try {
-                // Show loading state
-                const exportLoading = document.getElementById('exportLoading');
-                const exportContent = document.getElementById('exportContent');
-                const exportButton = document.querySelector('button[onclick="startExport()"]');
-                
-                if (!exportLoading || !exportContent || !exportButton) {
-                    throw new Error('Required elements not found');
-                }
-
-                exportContent.classList.add('hidden');
-                exportLoading.classList.remove('hidden');
-                exportButton.disabled = true;
-
-                // Get export options
-                const includeViewer = document.getElementById('includeViewer')?.checked ?? true;
-                const includePWA = document.getElementById('includePWA')?.checked ?? true;
-
-                // Get all scenes
-                const scenes = Array.from(document.querySelectorAll('#scenes-list .scene-item')).map(sceneItem => {
-                    const sceneId = sceneItem.dataset.sceneId;
-                    const title = sceneItem.querySelector('.scene-item-title')?.textContent ?? 'Untitled Scene';
+                // Process image URLs to ensure they are accessible to the server
+                const processedScenes = scenes.map(scene => {
+                    // Make sure the imageUrl is a full path or relative to public directory
+                    let imageUrl = scene.imageUrl;
                     
-                    // Get image URL from the viewer's config
-                    const sceneConfig = viewer?.getConfig().scenes?.[sceneId];
-                    if (!sceneConfig) {
-                        throw new Error(`Scene configuration not found for scene: ${title}`);
+                    // If it's an external URL, keep it as is
+                    if (imageUrl.startsWith('http')) {
+                        // Do nothing, keep external URL
+                    } 
+                    // Make sure local URLs are properly formatted
+                    else if (imageUrl.startsWith('/')) {
+                        // Already a root-relative path, which is good
+                    } 
+                    else {
+                        // Ensure it has a leading slash
+                        imageUrl = '/' + imageUrl;
                     }
-
-                    const imageUrl = sceneConfig.panorama;
-                    if (!imageUrl) {
-                        throw new Error(`Missing image URL for scene: ${title}`);
-                    }
-
-                    // Get hotspots for this scene
-                    const hotspots = Array.from(document.querySelectorAll(`.hotspot-item[data-scene-id="${sceneId}"]`))
-                        .map(hotspotItem => {
-                            const hotspotConfig = viewer?.getConfig().hotSpots?.find(
-                                h => h.id === hotspotItem.dataset.hotspotId
-                            );
-                            
-                            return {
-                                id: hotspotItem.dataset.hotspotId,
-                                name: hotspotItem.querySelector('.hotspot-item-title')?.textContent ?? 'Unnamed Hotspot',
-                                type: hotspotItem.querySelector('.hotspot-type')?.textContent.toLowerCase() ?? 'info',
-                                pitch: hotspotConfig?.pitch || 0,
-                                yaw: hotspotConfig?.yaw || 0,
-                                targetSceneId: hotspotItem.querySelector('.target-scene')?.dataset.sceneId
-                            };
-                        });
-
+                    
                     return {
-                        id: sceneId,
-                        title,
-                        imageUrl,
-                        hotspots
+                        ...scene,
+                        imageUrl: imageUrl
                     };
                 });
 
-                if (scenes.length === 0) {
-                    throw new Error('No scenes found to export');
+                // Check if we need to download and include Pannellum files
+                if (includeViewer) {
+                    try {
+                        // Try to fetch the Pannellum files to include them directly
+                        const pannellumJsResponse = await fetch('https://cdn.jsdelivr.net/npm/pannellum@2.5.6/build/pannellum.js');
+                        const pannellumCssResponse = await fetch('https://cdn.jsdelivr.net/npm/pannellum@2.5.6/build/pannellum.css');
+                        
+                        if (pannellumJsResponse.ok && pannellumCssResponse.ok) {
+                            const pannellumJs = await pannellumJsResponse.text();
+                            const pannellumCss = await pannellumCssResponse.text();
+                            
+                            console.log('Successfully fetched Pannellum files from CDN');
+                            
+                            // Include the files in our export data
+                            exportDataWithFiles = {
+                                virtualTourId: parseInt(tourId),
+                                title: document.querySelector('#tour-title')?.value || 'Untitled Tour',
+                                scenes: processedScenes,
+                                config: {
+                                    includeViewer: includeViewer,
+                                    includePWA: includePWA,
+                                    // Include file contents directly
+                                    viewerFiles: {
+                                        js: pannellumJs,
+                                        css: pannellumCss,
+                                        // Send as file content rather than paths
+                                        asFileContent: true
+                                    }
+                                }
+                            };
+                            
+                            // Make API call with Pannellum files included
+                            return await performExport(tourId, exportDataWithFiles);
+                        }
+                    } catch (error) {
+                        console.warn('Failed to fetch Pannellum files from CDN:', error);
+                        // Continue with regular export
+                    }
                 }
 
-                // Get the virtual tour ID
-                const virtualTourId = getVirtualTourId();
-                if (!virtualTourId) {
-                    throw new Error('Virtual Tour ID not found');
-                }
-
-                // Prepare export data
+                // Regular export without embedded files
                 const exportData = {
-                    virtualTourId: parseInt(virtualTourId),
+                    virtualTourId: parseInt(tourId),
                     title: document.querySelector('#tour-title')?.value || 'Untitled Tour',
-                    scenes,
+                    scenes: processedScenes,
                     config: {
-                        includeViewer,
-                        includePWA
+                        includeViewer: includeViewer,
+                        includePWA: includePWA,
+                        // Add alternative CDN paths to viewer files
+                        viewerFiles: {
+                            js: 'https://cdn.jsdelivr.net/npm/pannellum@2.5.6/build/pannellum.js',
+                            css: 'https://cdn.jsdelivr.net/npm/pannellum@2.5.6/build/pannellum.css',
+                            // Tell server to use CDN
+                            useCdn: true
+                        }
                     }
                 };
 
-                // Request export package
-                const response = await fetch(`/agent/virtual-360/${virtualTourId}/export`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Accept': 'application/json',
-                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content
-                    },
-                    body: JSON.stringify(exportData)
-                });
+                return await performExport(tourId, exportData);
 
-                if (!response.ok) {
-                    const errorData = await response.json();
-                    throw new Error(errorData.message || 'Failed to generate export package');
-                }
-
-                // Get the blob from response
-                const blob = await response.blob();
-                
-                // Create download link
-                const downloadUrl = window.URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = downloadUrl;
-                a.download = `virtual-tour-${virtualTourId}.zip`;
-                document.body.appendChild(a);
-                a.click();
-                window.URL.revokeObjectURL(downloadUrl);
-                document.body.removeChild(a);
-
-                showToast('Export package created successfully', 'success');
-                closeExportDialog();
             } catch (error) {
                 console.error('Export error:', error);
-                showToast('Error creating export package: ' + error.message, 'error');
-            } finally {
-                const exportLoading = document.getElementById('exportLoading');
-                const exportContent = document.getElementById('exportContent');
-                const exportButton = document.querySelector('button[onclick="startExport()"]');
                 
-                if (exportContent) exportContent.classList.remove('hidden');
-                if (exportLoading) exportLoading.classList.add('hidden');
-                if (exportButton) exportButton.disabled = false;
+                // Show error in dialog if possible
+                const errorElement = document.getElementById('exportError');
+                if (errorElement) {
+                    errorElement.querySelector('p').textContent = error.message;
+                    errorElement.classList.remove('hidden');
+                    document.getElementById('exportContent').classList.remove('hidden');
+                    document.getElementById('exportLoading').classList.add('hidden');
+                } else {
+                    // Fallback to toast
+                    showToast(`Export failed: ${error.message}`, 'error');
+                    closeExportDialog();
+                }
+            } finally {
+                // Reset dialog state if not showing error in dialog
+                if (document.getElementById('exportError')?.classList.contains('hidden')) {
+                    document.getElementById('exportContent').classList.remove('hidden');
+                    document.getElementById('exportLoading').classList.add('hidden');
+                }
             }
+        }
+
+        // Helper function to perform the actual export request
+        async function performExport(tourId, exportData) {
+            console.log('Export data:', exportData);
+
+            // Make API call to export
+            const response = await fetch(`/agent/virtual-360/${tourId}/export`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+                },
+                body: JSON.stringify(exportData)
+            });
+
+            console.log('Export response status:', response.status);
+
+            // Handle non-OK responses more gracefully
+            if (!response.ok) {
+                let errorMessage = 'Export failed';
+                try {
+                    const errorData = await response.json();
+                    errorMessage = errorData.message || 'Failed to export virtual tour';
+                    console.error('Server error details:', errorData);
+                } catch (e) {
+                    // If we can't parse JSON, try to get text
+                    try {
+                        const errorText = await response.text();
+                        console.error('Server error response:', errorText);
+                        // Try to extract error message from HTML response
+                        const match = errorText.match(/<title>(.*?)<\/title>/);
+                        if (match && match[1]) {
+                            errorMessage = 'Server error: ' + match[1];
+                        } else {
+                            errorMessage = 'Server error: ' + response.status;
+                        }
+                    } catch (textError) {
+                        errorMessage = 'Server error: ' + response.status;
+                    }
+                }
+                throw new Error(errorMessage);
+            }
+
+            // Get blob from response
+            const blob = await response.blob();
+            console.log('Received blob:', blob.size, 'bytes,', blob.type);
+            
+            // Create download link
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `virtual-tour-${tourId}.zip`;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            a.remove();
+
+            // Show success message
+            showToast('Virtual tour exported successfully!', 'success');
+            
+            // Close dialog
+            closeExportDialog();
+            
+            return true;
+        }
+
+        function closeExportDialog() {
+            document.getElementById('exportDialog').classList.add('hidden');
+            document.getElementById('exportContent').classList.remove('hidden');
+            document.getElementById('exportLoading').classList.add('hidden');
+            
+            // Hide error message if shown
+            const errorElement = document.getElementById('exportError');
+            if (errorElement) {
+                errorElement.classList.add('hidden');
+            }
+        }
+
+        // ... existing code ...
+
+        // Scene checking functions
+        function hasScenesToExport() {
+            const scenes = document.querySelectorAll('.scene-item');
+            return scenes && scenes.length > 0;
+        }
+
+        function getScenesToExport() {
+            const scenes = [];
+            document.querySelectorAll('.scene-item').forEach(scene => {
+                scenes.push({
+                    id: parseInt(scene.dataset.sceneId),
+                    title: scene.querySelector('.scene-item-title').textContent,
+                    imageUrl: scene.dataset.sceneUrl
+                });
+            });
+            return scenes;
+        }
+
+        // Export functions
+        function exportTour() {
+            if (!hasScenesToExport()) {
+                showToast('Error: No scenes available to export', 'error');
+                return;
+            }
+            
+            // Show export dialog
+            document.getElementById('exportDialog').classList.remove('hidden');
         }
 
         // ... existing code ...
