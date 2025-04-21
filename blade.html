@@ -559,6 +559,44 @@
             font-size: 12px;
             white-space: nowrap;
         }
+
+        /* Improved hotspot styling */
+        .custom-hotspot {
+            width: 32px !important;
+            height: 32px !important;
+            margin-left: -16px !important;
+            margin-top: -16px !important;
+            border-radius: 50% !important;
+            cursor: pointer !important;
+            transform-origin: center center !important;
+            background-color: rgba(255, 255, 255, 0.8) !important;
+            border: 2px solid #3b82f6 !important;
+            transition: all 0.3s ease !important;
+        }
+
+        .custom-hotspot.navigation {
+            background-color: rgba(59, 130, 246, 0.9) !important;
+            border-color: white !important;
+        }
+
+        .custom-hotspot:hover {
+            transform: scale(1.2) !important;
+        }
+
+        .hotspot-tooltip {
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            white-space: nowrap;
+            margin-bottom: 8px;
+            pointer-events: none;
+        }
     </style>
 </head>
 <body>
@@ -1037,194 +1075,154 @@
 
         // Modified loadScene function to handle hotspots better
         function loadScene(sceneUrl) {
-            console.log('Loading scene:', sceneUrl);
+            const sceneElements = document.querySelectorAll('.scene-item');
+            const currentScene = Array.from(sceneElements).find(el => el.dataset.sceneUrl === sceneUrl);
             
-            const loadingElement = document.getElementById('loading');
-            if (loadingElement) {
-                loadingElement.classList.remove('hidden');
+            if (!currentScene) {
+                console.error('Scene not found:', sceneUrl);
+                return;
             }
-            document.getElementById('debugStatus').textContent = 'Status: Loading scene...';
-            
-            try {
-                // Get scene item data
-                const sceneItem = Array.from(document.querySelectorAll('.scene-item'))
-                    .find(item => item.dataset.sceneUrl === sceneUrl);
-                
-                if (!sceneItem) {
-                    console.error('Scene not found in DOM with URL:', sceneUrl);
-                    document.getElementById('debugStatus').textContent = 'Status: Error - Scene not found in sidebar';
-                    showToast('Scene berhasil diupload, tapi tidak ditemukan di sidebar. Refresh halaman jika diperlukan.', 'warning');
-                    
-                    // Jangan lempar error agar proses tetap berjalan, khususnya setelah upload scene baru
-                    if (loadingElement) {
-                        loadingElement.classList.add('hidden');
-                    }
-                    return;
-                }
 
-                // Update active scene in sidebar
-                document.querySelectorAll('.scene-item').forEach(item => {
-                    item.classList.toggle('active', item.dataset.sceneUrl === sceneUrl);
+            currentSceneId = currentScene.dataset.sceneId;
+            
+            // Destroy existing viewer if it exists
+            if (viewer) {
+                viewer.destroy();
+            }
+
+            // Show loading indicator
+            document.getElementById('loading').classList.remove('hidden');
+
+            try {
+                // Initialize new viewer
+                viewer = initializeViewer(sceneUrl);
+
+                // Add event listeners for the viewer
+                viewer.on('load', function() {
+                    console.log('Scene loaded successfully');
+                    document.getElementById('loading').classList.add('hidden');
+                    
+                    // Load hotspots after scene is loaded
+                    loadHotspots(currentSceneId);
+                    
+                    // Update scene thumbnails
+                    updateSceneThumbnails();
                 });
 
-                // Store previous scene ID before changing
-                const previousSceneId = currentSceneId;
-                
-                // Update current scene ID
-                currentSceneId = sceneItem.dataset.sceneId;
-                console.log('Switching from scene', previousSceneId, 'to scene ID:', currentSceneId);
-
-                // Update scene title in viewer header
-                const sceneTitle = sceneItem.querySelector('.scene-item-title').textContent;
-                document.querySelector('.viewer-header h2').textContent = sceneTitle;
-
-                // Clear existing hotspots before changing scenes
-                if (viewer) {
-                    try {
-                        const config = viewer.getConfig();
-                        if (config.hotSpots) {
-                            config.hotSpots.forEach(hotspot => {
-                                try {
-                                    viewer.removeHotSpot(hotspot.id);
-                                } catch (e) {
-                                    console.warn('Error removing hotspot:', e);
-                                }
-                            });
-                        }
-                        
-                        // Destroy the old viewer to ensure clean state
-                        viewer.destroy();
-                        viewer = null;
-                    } catch (e) {
-                        console.warn('Error clearing viewer:', e);
-                    }
-                }
-
-                // Create new viewer instance
-                viewer = pannellum.viewer('viewer', {
-                    type: 'equirectangular',
-                    panorama: sceneUrl,
-                    autoLoad: true,
-                    autoRotate: autoRotate,
-                    compass: true,
-                    mouseZoom: true,
-                    preview: '',
-                    hotSpots: [], // Start with empty hotspots
-                    hfov: 100,
-                    minHfov: 50,
-                    maxHfov: 120,
-                    showZoomCtrl: true,
-                    showFullscreenCtrl: true,
-                    orientationOnByDefault: gyroscopeEnabled,
-                    onLoad: function() {
-                        console.log('Scene loaded successfully');
-                        if (loadingElement) {
-                            loadingElement.classList.add('hidden');
-                        }
-                        document.getElementById('debugStatus').textContent = 'Status: Scene loaded successfully';
-                        
-                        // Directly fetch hotspots for the new scene
-                        if (currentSceneId) {
-                            // Clear hotspot list before fetching new hotspots
-                            const hotspotList = document.querySelector('.hotspot-list');
-                            if (hotspotList) {
-                                hotspotList.innerHTML = `
-                                    <div class="flex items-center justify-center p-4">
-                                        <div class="loading-spinner w-6 h-6 mr-2"></div>
-                                        <span>Loading hotspots...</span>
-                                    </div>
-                                `;
-                            }
-
-                            console.log('Direct fetch of hotspots for scene:', currentSceneId);
-                            
-                            // Use fetch directly instead of loadHotspots function
-                            fetch(`/agent/virtual-360/scenes/${currentSceneId}/hotspots`, {
-                                method: 'GET',
-                                headers: {
-                                    'Accept': 'application/json',
-                                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
-                                    'Cache-Control': 'no-cache'
-                                }
-                            })
-                            .then(response => {
-                                if (!response.ok) {
-                                    throw new Error(`HTTP error! status: ${response.status}`);
-                                }
-                                return response.json();
-                            })
-                            .then(data => {
-                                console.log('Direct fetch hotspot response:', data);
-                                
-                                if (!data.success) {
-                                    throw new Error(data.message || 'Failed to load hotspots');
-                                }
-                                
-                                // Add hotspots to the viewer
-                                if (data.hotspots && data.hotspots.length > 0) {
-                                    data.hotspots.forEach(hotspot => {
-                                        try {
-                                            if (!hotspot.pitch || !hotspot.yaw) {
-                                                console.error('Invalid hotspot coordinates:', hotspot);
-                                                return;
-                                            }
-                                            
-                                            viewer.addHotSpot({
-                                                id: hotspot.id.toString(),
-                                                pitch: parseFloat(hotspot.pitch),
-                                                yaw: parseFloat(hotspot.yaw),
-                                                type: 'custom',
-                                                cssClass: `custom-hotspot ${hotspot.type}`,
-                                                createTooltipFunc: (divElement) => {
-                                                    divElement.innerHTML = `<div class="hotspot-tooltip">${hotspot.name || hotspot.text || 'Hotspot'}</div>`;
-                                                },
-                                                clickHandlerFunc: (e) => {
-                                                    if (hotspot.type === 'navigation' && hotspot.target_scene_id) {
-                                                        const targetSceneElement = document.querySelector(`[data-scene-id="${hotspot.target_scene_id}"]`);
-                                                        if (targetSceneElement) {
-                                                            const targetSceneUrl = targetSceneElement.dataset.sceneUrl;
-                                                            if (targetSceneUrl) {
-                                                                loadScene(targetSceneUrl);
-                                                            }
-                                                        }
-                                                    }
-                                                }
-                                            });
-                                        } catch (error) {
-                                            console.error('Error adding hotspot to viewer:', error, hotspot);
-                                        }
-                                    });
-                                }
-                                
-                                // Update hotspot list in the sidebar
-                                updateHotspotList(data.hotspots, data.scenes);
-                            })
-                            .catch(error => {
-                                console.error('Error loading hotspots:', error);
-                                showToast('Error loading hotspots: ' + error.message, 'error');
-                            });
-                        }
-                        
-                        showToast('Scene loaded successfully', 'success');
-                    },
-                    onError: function(err) {
-                        console.error('Error loading scene:', err);
-                        if (loadingElement) {
-                            loadingElement.classList.add('hidden');
-                        }
-                        document.getElementById('debugStatus').textContent = 'Status: Error - ' + err;
-                        showToast('Error loading scene: ' + err, 'error');
-                    }
+                viewer.on('error', function(err) {
+                    console.error('Error loading scene:', err);
+                    showToast('Error loading scene', 'error');
+                    document.getElementById('loading').classList.add('hidden');
                 });
 
             } catch (error) {
-                console.error('Error in loadScene:', error);
-                if (loadingElement) {
-                    loadingElement.classList.add('hidden');
-                }
-                document.getElementById('debugStatus').textContent = 'Status: Error - ' + error.message;
-                showToast('Error loading scene: ' + error.message, 'error');
+                console.error('Error initializing viewer:', error);
+                showToast('Error initializing viewer', 'error');
+                document.getElementById('loading').classList.add('hidden');
             }
+        }
+
+        // Inisialisasi viewer dengan konfigurasi yang tepat
+        function initializeViewer(sceneUrl) {
+            return pannellum.viewer('viewer', {
+                type: "equirectangular",
+                panorama: sceneUrl,
+                autoLoad: true,
+                autoRotate: -2,
+                compass: false,
+                hotSpotDebug: true, // Aktifkan untuk debug
+                hotSpots: [],
+                default: {
+                    firstScene: true,
+                    sceneFadeDuration: 1000,
+                    autoRotate: 0,
+                    compass: false
+                },
+                // Tambahkan event handler untuk menangkap koordinat klik
+                mousemove: function(event) {
+                    if (!isHotspotPlacementMode) return;
+                    updateCoordinatesDebug(event);
+                },
+                mousedown: function(event) {
+                    if (!isHotspotPlacementMode) return;
+                    handleSceneClick(event);
+                }
+            });
+        }
+
+        function createHotspot(hotspotData) {
+            if (!viewer) {
+                console.error('Viewer not initialized');
+                return;
+            }
+
+            try {
+                const hotspotConfig = {
+                    id: `hotspot-${hotspotData.id}`,
+                    pitch: parseFloat(hotspotData.pitch),
+                    yaw: parseFloat(hotspotData.yaw),
+                    type: hotspotData.type,
+                    text: hotspotData.name,
+                    cssClass: `custom-hotspot ${hotspotData.type}`,
+                    createTooltipFunc: createTooltipFunc,
+                    clickHandlerFunc: (event, hotspot) => {
+                        if (hotspotData.type === 'navigation' && hotspotData.target_scene_id) {
+                            const targetScene = document.querySelector(
+                                `.scene-item[data-scene-id="${hotspotData.target_scene_id}"]`
+                            );
+                            if (targetScene) {
+                                loadScene(targetScene.dataset.sceneUrl);
+                            }
+                        }
+                    }
+                };
+
+                viewer.addHotSpot(hotspotConfig);
+                console.log('Hotspot created:', hotspotConfig);
+
+            } catch (error) {
+                console.error('Error creating hotspot:', error);
+                showToast('Error creating hotspot', 'error');
+            }
+        }
+
+        // Custom tooltip function
+        function createTooltipFunc(divElement, args) {
+            const tooltip = document.createElement('div');
+            tooltip.classList.add('hotspot-tooltip');
+            tooltip.textContent = args.text;
+            divElement.appendChild(tooltip);
+        }
+
+        function handleSceneClick(event) {
+            if (!isHotspotPlacementMode || !viewer) return;
+
+            try {
+                const coords = viewer.mouseEventToCoords(event);
+                lastHotspotCoords = {
+                    pitch: coords[0],
+                    yaw: coords[1]
+                };
+                
+                console.log('Captured coordinates:', lastHotspotCoords);
+                showAddHotspotDialog();
+                
+                // Update debug display
+                updateCoordinatesDebug({
+                    pitch: coords[0],
+                    yaw: coords[1]
+                });
+                
+            } catch (error) {
+                console.error('Error capturing coordinates:', error);
+                showToast('Error capturing coordinates', 'error');
+            }
+        }
+
+        function updateCoordinatesDebug(coords) {
+            if (!mouseDebugDisplay) return;
+            
+            mouseDebugDisplay.textContent = `Pitch: ${coords.pitch.toFixed(2)}°, Yaw: ${coords.yaw.toFixed(2)}°`;
         }
 
         // Helper function to check if viewer is initialized
